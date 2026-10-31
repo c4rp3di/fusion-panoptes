@@ -137,7 +137,7 @@ private fun ModuleRow(
 
         Spacer(Modifier.height(8.dp))
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Arrangement.End),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
             modifier = Modifier.fillMaxWidth()
         ) {
             when {
