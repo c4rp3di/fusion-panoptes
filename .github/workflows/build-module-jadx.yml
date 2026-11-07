@@ -108,12 +108,37 @@ jobs:
             exit 1
           fi
 
+      - name: Conservar recursos de los jars (META-INF/services, clst/... — d8 los descarta)
+        # v1.0.25 — NUEVO. d8 solo convierte .class a dex: todo lo demás que llevaran
+        # los jars originales (ficheros de ServiceLoader en META-INF/services/, y en
+        # concreto jadx-core necesita además clst/core.jcst en tiempo de ejecución —
+        # confirmado con un informe real: "Can't load classpath file: /clst/core.jcst")
+        # se perdía sin más. DexClassLoader puede apuntar a un .jar/.zip que CONTENGA
+        # classes.dex y usar ese mismo archivo como fuente de recursos — así que
+        # "classes.dex" pasa a ser ese .zip (con ese mismo nombre: a DexClassLoader no
+        # le importa la extensión, mira los bytes), no un .dex pelado. No hace falta
+        # tocar ModuleManager.kt ni module.json: siguen esperando un fichero llamado
+        # "classes.dex", solo cambia lo que hay dentro.
+        run: |
+          set -e
+          RES="$GITHUB_WORKSPACE/_res"
+          mkdir -p "$RES"
+          for j in "$GITHUB_WORKSPACE/$PROY/modules-src/jadx-wrapper/libs"/*.jar; do
+            unzip -o -q "$j" -x '*.class' -x 'module-info.class' -d "$RES" || true
+          done
+          echo "Recursos conservados del descarte de d8:"
+          find "$RES" -type f
+
       - name: Crear ZIP del módulo y hashes
         run: |
           set -e
           OUT="$GITHUB_WORKSPACE/_out"
+          RES="$GITHUB_WORKSPACE/_res"
           mkdir -p "$OUT/pack"
-          cp "$GITHUB_WORKSPACE/_dex/classes.dex" "$OUT/pack/classes.dex"
+          # "classes.dex" ya no es el .dex pelado: es un .zip que lleva el .dex real
+          # (bajo ese mismo nombre de entrada) MÁS los recursos del paso anterior.
+          cp "$GITHUB_WORKSPACE/_dex/classes.dex" "$RES/classes.dex"
+          (cd "$RES" && zip -q -r "$OUT/pack/classes.dex" .)
           python3 - <<PY
           import json
           json.dump({"id": "jadx", "version": "$LIB_VERSION", "entryClass": "com.carpe.panoptes.modules.jadx.JadxAnalyzer", "dexName": "classes.dex"},
