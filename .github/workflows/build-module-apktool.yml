@@ -123,12 +123,36 @@ jobs:
             exit 1
           fi
 
+      - name: Conservar recursos de los jars (apktool.properties y similares — d8 los descarta)
+        # v1.0.25 — misma causa que se confirmó en el módulo jadx (ver ese workflow):
+        # d8 solo convierte .class a dex, cualquier otro recurso de los jars originales
+        # se pierde. No tengo confirmación de que apktool-lib necesite alguno en
+        # concreto en tiempo de ejecución (el fallo real visto hasta ahora fue un
+        # NullPointerException sobre una propiedad de sistema, no un recurso que
+        # falte) — esto es preventivo: no hace daño si no hacía falta, y si apktool
+        # SÍ necesita algún recurso embebido que todavía no hemos visto fallar, ya
+        # queda cubierto sin tener que volver a tocar esto.
+        run: |
+          set -e
+          RES="$GITHUB_WORKSPACE/_res"
+          mkdir -p "$RES"
+          for j in "$GITHUB_WORKSPACE/$PROY/modules-src/apktool-wrapper/libs"/*.jar; do
+            unzip -o -q "$j" -x '*.class' -x 'module-info.class' -d "$RES" || true
+          done
+          echo "Recursos conservados del descarte de d8:"
+          find "$RES" -type f
+
       - name: Crear ZIP del módulo y hashes
         run: |
           set -e
           OUT="$GITHUB_WORKSPACE/_out"
+          RES="$GITHUB_WORKSPACE/_res"
           mkdir -p "$OUT/pack"
-          cp "$GITHUB_WORKSPACE/_dex/classes.dex" "$OUT/pack/classes.dex"
+          # "classes.dex" ya no es el .dex pelado: es un .zip que lleva el .dex real
+          # (bajo ese mismo nombre de entrada) MÁS los recursos del paso anterior —
+          # DexClassLoader admite ambos formatos bajo el mismo nombre de archivo.
+          cp "$GITHUB_WORKSPACE/_dex/classes.dex" "$RES/classes.dex"
+          (cd "$RES" && zip -q -r "$OUT/pack/classes.dex" .)
           python3 - <<PY
           import json
           json.dump({"id": "apktool", "version": "$LIB_VERSION", "entryClass": "com.carpe.panoptes.modules.apktool.ApktoolAnalyzer", "dexName": "classes.dex"},
