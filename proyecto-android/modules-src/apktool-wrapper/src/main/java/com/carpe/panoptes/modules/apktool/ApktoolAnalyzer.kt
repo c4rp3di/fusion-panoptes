@@ -44,6 +44,17 @@ class ApktoolAnalyzer : AnalyzerModule {
         if (anterior == null || !File(anterior).canWrite()) {
             System.setProperty("user.home", workDir.absolutePath)
         }
+        // v1.0.24 — el error real (visto con la cadena de causas completa)
+        // no era una ruta no escribible: era un NullPointerException en
+        // .toLowerCase() dentro del mismo setDefaultFrameworkDirectory. Eso
+        // apunta a OTRA propiedad de sistema nula, no a "user.home" — lo más
+        // probable, por el patrón ".toLowerCase()" nada más leerla, es
+        // "os.name" (apktool-lib, como tantas libs de escritorio, suele
+        // usarla para decidir la convención de carpeta: win/mac/linux).
+        // Sigue siendo una hipótesis razonada, no una certeza confirmada.
+        if (System.getProperty("os.name") == null) {
+            System.setProperty("os.name", "Linux") // Android es Linux; es el valor más defendible si hiciera falta
+        }
         return true
     }
 
